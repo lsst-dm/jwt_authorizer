@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from base64 import b64encode
 from enum import Enum
 from functools import wraps
@@ -46,7 +47,10 @@ class KubernetesStorage:
     """
 
     def __init__(self) -> None:
-        kubernetes.config.load_incluster_config()
+        if "KUBERNETES_PORT" in os.environ:
+            kubernetes.config.load_incluster_config()
+        else:
+            kubernetes.config.load_kube_config()
         self._api = kubernetes.client.CoreV1Api()
 
     @_convert_exception
