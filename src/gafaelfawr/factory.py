@@ -129,7 +129,7 @@ class ComponentFactory:
     def create_kubernetes_service(self) -> KubernetesService:
         """Create a Kubernetes service."""
         assert self._config.kubernetes
-        storage = KubernetesStorage()
+        storage = KubernetesStorage(self._logger)
         token_service = self.create_token_service()
         return KubernetesService(
             config=self._config.kubernetes,
