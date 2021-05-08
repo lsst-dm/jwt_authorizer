@@ -106,13 +106,10 @@ async def update_service_tokens() -> None:
     """Update service tokens stored in Kubernetes secrets."""
     config = config_dependency()
     logger = structlog.get_logger(config.safir.logger_name)
-    if not config.kubernetes:
-        logger.info("No Kubernetes secrets configured")
-        sys.exit(0)
     async with ComponentFactory.standalone() as factory:
         kubernetes_service = factory.create_kubernetes_service()
         try:
-            await kubernetes_service.update_service_secrets()
+            await kubernetes_service.update_service_tokens()
         except KubernetesError as e:
             msg = "Failed to update service token secrets"
             logger.error(msg, error=str(e))

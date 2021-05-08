@@ -101,7 +101,7 @@ class KubernetesStorage:
         self._logger = logger
 
     @_convert_exception
-    def create_service_secret(
+    def create_secret_for_service_token(
         self, parent: GafaelfawrServiceToken, token: Token
     ) -> None:
         """Create a Kubernetes secret from a token.
@@ -115,7 +115,7 @@ class KubernetesStorage:
         token : `gafaelfawr.models.token.Token`
             The token to store.
         """
-        secret = self._build_service_secret(parent, token)
+        secret = self._build_secret_for_service_token(parent, token)
         self._api.create_namespaced_secret(parent.namespace, secret)
         self.update_service_token_status(
             parent,
@@ -125,7 +125,7 @@ class KubernetesStorage:
         )
 
     @_convert_exception
-    def get_service_secret(
+    def get_secret_for_service_token(
         self, parent: GafaelfawrServiceToken
     ) -> Optional[V1Secret]:
         """Retrieve the secret corresponding to a GafaelfawrServiceToken.
@@ -195,7 +195,7 @@ class KubernetesStorage:
         return tokens
 
     @_convert_exception
-    def replace_service_secret(
+    def replace_secret_for_service_token(
         self, parent: GafaelfawrServiceToken, token: Token
     ) -> None:
         """Replace the token in a secret.
@@ -207,7 +207,7 @@ class KubernetesStorage:
         token : `gafaelfawr.models.token.Token`
             The token to store.
         """
-        secret = self._build_service_secret(parent, token)
+        secret = self._build_secret_for_service_token(parent, token)
         self._api.replace_namespaced_secret(parent.namespace, secret)
         self.update_service_token_status(
             parent,
@@ -239,24 +239,22 @@ class KubernetesStorage:
             Whether the GafaelfawrServiceToken was successfully processed.
         """
         now = datetime.now(tz=timezone.utc).isoformat(timespec="seconds") + "Z"
-        patch = (
-            [
-                {
-                    "op": "replace",
-                    "path": "/status/conditions",
-                    "value": [
-                        {
-                            "lastTransitionTime": now,
-                            "message": message,
-                            "observedGeneration": service_token.generation,
-                            "reason": StatusReason.value,
-                            "status": "True" if success else "False",
-                            "type": "SecretCreated",
-                        },
-                    ],
-                },
-            ],
-        )
+        patch = [
+            {
+                "op": "replace",
+                "path": "/status/conditions",
+                "value": [
+                    {
+                        "lastTransitionTime": now,
+                        "message": message,
+                        "observedGeneration": service_token.generation,
+                        "reason": StatusReason.value,
+                        "status": "True" if success else "False",
+                        "type": "SecretCreated",
+                    },
+                ],
+            },
+        ]
         self._custom_api.patch_namespaced_custom_object_status(
             "gafaelfawr.lsst.io",
             "v1alpha1",
@@ -266,7 +264,7 @@ class KubernetesStorage:
             patch,
         )
 
-    def _build_service_secret(
+    def _build_secret_for_service_token(
         self, parent: GafaelfawrServiceToken, token: Token
     ) -> V1Secret:
         """Construct a new Secret object.

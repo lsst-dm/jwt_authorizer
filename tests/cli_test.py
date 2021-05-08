@@ -15,10 +15,8 @@ from click.testing import CliRunner
 from kubernetes.client import ApiException
 
 from gafaelfawr.cli import main
-from gafaelfawr.dependencies.config import config_dependency
 from gafaelfawr.models.token import Token
-from tests.support.kubernetes import MockCoreV1Api
-from tests.support.settings import build_settings
+from tests.support.kubernetes import MockKubernetesApi
 from tests.support.setup import initialize
 
 if TYPE_CHECKING:
@@ -66,31 +64,48 @@ def test_help() -> None:
 
 
 def test_update_service_tokens(
-    tmp_path: Path, mock_kubernetes: MockCoreV1Api
+    tmp_path: Path, mock_kubernetes: MockKubernetesApi
 ) -> None:
-    config = initialize(tmp_path)
+    initialize(tmp_path)
+    mock_kubernetes.create_namespaced_custom_object(
+        "gafaelfawr.lsst.io",
+        "v1alpha1",
+        "mobu",
+        "gafaelfawrservicetokens",
+        {
+            "apiVersion": "gafaelfawr.lsst.io/v1alpha1",
+            "kind": "GafaelfawrServiceToken",
+            "generation": 1,
+            "metadata": {
+                "name": "gafaelfawr-secret",
+                "namespace": "mobu",
+            },
+            "spec": {
+                "service": "mobu",
+                "scopes": ["admin:token"],
+            },
+        },
+    )
 
     runner = CliRunner()
     result = runner.invoke(main, ["update-service-tokens"])
 
     assert result.exit_code == 0
-    assert config.kubernetes
-    service_secret = config.kubernetes.service_secrets[0]
-    assert mock_kubernetes.read_namespaced_secret(
-        service_secret.secret_name, service_secret.secret_namespace
-    )
+    assert mock_kubernetes.read_namespaced_secret("gafaelfawr-secret", "mobu")
 
 
 def test_update_service_tokens_error(
-    tmp_path: Path, mock_kubernetes: MockCoreV1Api, caplog: LogCaptureFixture
+    tmp_path: Path,
+    mock_kubernetes: MockKubernetesApi,
+    caplog: LogCaptureFixture,
 ) -> None:
     initialize(tmp_path)
 
     def error_callback(method: str, *args: Any) -> None:
-        if method == "list_secret_for_all_namespaces":
+        if method == "list_cluster_custom_object":
             raise ApiException(status=500, reason="Some error")
 
-    MockCoreV1Api.error_callback = error_callback
+    mock_kubernetes.error_callback = error_callback
     caplog.clear()
     runner = CliRunner()
     result = runner.invoke(main, ["update-service-tokens"])
@@ -98,7 +113,7 @@ def test_update_service_tokens_error(
     assert result.exit_code == 1
     assert [json.loads(r[2]) for r in caplog.record_tuples] == [
         {
-            "event": "Unable to list service token secrets",
+            "event": "Unable to list GafaelfawrServiceToken objects",
             "error": "Kubernetes API error: (500)\nReason: Some error\n",
             "level": "error",
             "logger": "gafaelfawr",
@@ -110,22 +125,3 @@ def test_update_service_tokens_error(
             "logger": "gafaelfawr",
         },
     ]
-
-
-def test_update_service_tokens_no_config(
-    tmp_path: Path, mock_kubernetes: MockCoreV1Api, caplog: LogCaptureFixture
-) -> None:
-    initialize(tmp_path)
-    settings_path = build_settings(tmp_path, "oidc")
-    config_dependency.set_settings_path(str(settings_path))
-
-    caplog.clear()
-    runner = CliRunner()
-    result = runner.invoke(main, ["update-service-tokens"])
-
-    assert result.exit_code == 0
-    assert json.loads(caplog.record_tuples[0][2]) == {
-        "event": "No Kubernetes secrets configured",
-        "level": "info",
-        "logger": "gafaelfawr",
-    }

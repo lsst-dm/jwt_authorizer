@@ -27,12 +27,3 @@ issuer:
 github:
   client_id: "some-github-client-id"
   client_secret_file: "{github_secret_file}"
-kubernetes:
-  service_secrets:
-    - secret_namespace: "mobu"
-      secret_name: "gafaelfawr-secret"
-      service: "mobu"
-      scopes: ["admin:token"]
-    - secret_namespace: "nublado"
-      secret_name: "gafaelfawr"
-      service: "nublado-hub"

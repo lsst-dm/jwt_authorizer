@@ -10,7 +10,7 @@ import pytest
 
 from gafaelfawr.dependencies.config import config_dependency
 from tests.support.constants import TEST_HOSTNAME
-from tests.support.kubernetes import MockCoreV1Api
+from tests.support.kubernetes import MockKubernetesApi
 from tests.support.selenium import run_app, selenium_driver
 from tests.support.settings import build_settings
 from tests.support.setup import SetupTest
@@ -42,11 +42,25 @@ def driver() -> Iterator[webdriver.Chrome]:
 
 
 @pytest.fixture
-def mock_kubernetes() -> Iterator[MockCoreV1Api]:
-    MockCoreV1Api.reset_for_test()
+def mock_kubernetes() -> Iterator[MockKubernetesApi]:
+    """Replace the Kubernetes API with a mock class.
+
+    Returns
+    -------
+    mock_kubernetes : `tests.support.kubernetes.MockKubernetesApi`
+        The mock Kubernetes API object.
+    """
     with patch.object(kubernetes, "config"):
-        with patch.object(kubernetes.client, "CoreV1Api", MockCoreV1Api):
-            yield MockCoreV1Api()
+        mock_api = MockKubernetesApi()
+        patchers = []
+        for api in ("CoreV1Api", "CustomObjectsApi"):
+            patcher = patch.object(kubernetes.client, api)
+            mock_class = patcher.start()
+            mock_class.return_value = mock_api
+            patchers.append(patcher)
+        yield mock_api
+        for patcher in patchers:
+            patcher.stop()
 
 
 @pytest.fixture
